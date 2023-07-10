@@ -1,0 +1,71 @@
+import logging
+import sqlite3
+from telegram import Update
+from telegram.ext import Updater, CommandHandler, MessageHandler, Filters, CallbackContext
+
+# Enable logging
+logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+                    level=logging.INFO)
+logger = logging.getLogger(__name__)
+
+# Database initialization
+conn = sqlite3.connect('exam_database.db')
+cursor = conn.cursor()
+cursor.execute('''CREATE TABLE IF NOT EXISTS students
+                  (id INTEGER PRIMARY KEY AUTOINCREMENT,
+                   name TEXT,
+                   exam_subject TEXT,
+                   exam_date TEXT)''')
+conn.commit()
+
+# Telegram bot commands
+def start(update: Update, context: CallbackContext) -> None:
+    """Send a welcome message when the command /start is issued."""
+    update.message.reply_text('Welcome to the State Exam Database Bot!')
+
+def add_student(update: Update, context: CallbackContext) -> None:
+    """Add a new student to the database."""
+    message = update.message
+    args = message.text.split()[1:]  # Extract arguments from the message
+    if len(args) < 3:
+        message.reply_text('Invalid number of arguments. Usage: /add_student <name> <exam_subject> <exam_date>')
+        return
+    name, exam_subject, exam_date = args
+    cursor.execute("INSERT INTO students (name, exam_subject, exam_date) VALUES (?, ?, ?)", (name, exam_subject, exam_date))
+    conn.commit()
+    message.reply_text('Student added successfully.')
+
+def get_students(update: Update, context: CallbackContext) -> None:
+    """Get a list of all students from the database."""
+    cursor.execute("SELECT * FROM students")
+    rows = cursor.fetchall()
+    if not rows:
+        update.message.reply_text('No students found.')
+        return
+    message = '\n'.join([f'{row[0]}: {row[1]} - {row[2]} - {row[3]}' for row in rows])
+    update.message.reply_text(message)
+
+def error(update: Update, context: CallbackContext) -> None:
+    """Log Errors caused by Updates."""
+    logger.warning('Update "%s" caused error "%s"', update, context.error)
+
+def main() -> None:
+    """Start the bot."""
+    # Set up the Telegram bot updater
+    updater = Updater("YOUR_TELEGRAM_BOT_TOKEN")
+
+    # Get the dispatcher to register handlers
+    dispatcher = updater.dispatcher
+
+    # Register handlers
+    dispatcher.add_handler(CommandHandler("start", start))
+    dispatcher.add_handler(CommandHandler("add_student", add_student))
+    dispatcher.add_handler(CommandHandler("get_students", get_students))
+    dispatcher.add_error_handler(error)
+
+    # Start the bot
+    updater.start_polling()
+    updater.idle()
+
+if __name__ == '__main__':
+    main()
